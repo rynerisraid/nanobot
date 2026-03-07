@@ -445,10 +445,56 @@ class DingTalkChannel(BaseChannel):
             logger.error("Error sending DingTalk message msgKey={} err={}", msg_key, e)
             return False
 
+    async def _send_group_message(
+        self,
+        token: str,
+        conversation_id: str,
+        msg_key: str,
+        msg_param: dict[str, Any],
+    ) -> bool:
+        """发送群聊消息 - 使用群聊专用接口"""
+        if not self._http:
+            logger.warning("DingTalk HTTP client not initialized, cannot send")
+            return False
+
+        url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send"
+        headers = {"x-acs-dingtalk-access-token": token}
+        payload = {
+            "robotCode": self.config.client_id,
+            "openConversationId": conversation_id,
+            "msgKey": msg_key,
+            "msgParam": json.dumps(msg_param, ensure_ascii=False),
+        }
+
+        try:
+            resp = await self._http.post(url, json=payload, headers=headers)
+            body = resp.text
+            if resp.status_code != 200:
+                logger.error("DingTalk group send failed msgKey={} status={} body={}", msg_key, resp.status_code, body[:500])
+                return False
+            result = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+            errcode = result.get("errcode")
+            if errcode not in (None, 0):
+                logger.error("DingTalk group send api error msgKey={} errcode={} body={}", msg_key, errcode, body[:500])
+                return False
+            logger.debug("DingTalk group message sent to {} with msgKey={}", conversation_id, msg_key)
+            return True
+        except Exception as e:
+            logger.error("Error sending DingTalk group message msgKey={} err={}", msg_key, e)
+            return False
+
     async def _send_markdown_text(self, token: str, chat_id: str, content: str) -> bool:
         return await self._send_batch_message(
             token,
             chat_id,
+            "sampleMarkdown",
+            {"text": content, "title": "Nanobot Reply"},
+        )
+
+    async def _send_group_markdown_text(self, token: str, conversation_id: str, content: str) -> bool:
+        return await self._send_group_message(
+            token,
+            conversation_id,
             "sampleMarkdown",
             {"text": content, "title": "Nanobot Reply"},
         )
@@ -519,21 +565,38 @@ class DingTalkChannel(BaseChannel):
         if not token:
             return
 
+        # 从 metadata 判断是否为群聊 (conversation_type: 1=私聊, 2=群聊)
+        is_group = msg.metadata.get("conversation_type") == "2"
+
         if msg.content and msg.content.strip():
-            await self._send_markdown_text(token, msg.chat_id, msg.content.strip())
+            if is_group:
+                await self._send_group_markdown_text(token, msg.chat_id, msg.content.strip())
+            else:
+                await self._send_markdown_text(token, msg.chat_id, msg.content.strip())
 
         for media_ref in msg.media or []:
-            ok = await self._send_media_ref(token, msg.chat_id, media_ref)
+            # 群聊媒体发送暂使用同样的方法（需要先上传媒体）
+            if is_group:
+                ok = await self._send_media_ref(token, msg.chat_id, media_ref)
+            else:
+                ok = await self._send_media_ref(token, msg.chat_id, media_ref)
             if ok:
                 continue
             logger.error("DingTalk media send failed for {}", media_ref)
             # Send visible fallback so failures are observable by the user.
             filename = self._guess_filename(media_ref, self._guess_upload_type(media_ref))
-            await self._send_markdown_text(
-                token,
-                msg.chat_id,
-                f"[Attachment send failed: {filename}]",
-            )
+            if is_group:
+                await self._send_group_markdown_text(
+                    token,
+                    msg.chat_id,
+                    f"[Attachment send failed: {filename}]",
+                )
+            else:
+                await self._send_markdown_text(
+                    token,
+                    msg.chat_id,
+                    f"[Attachment send failed: {filename}]",
+                )
 
     async def _on_message(
         self,
