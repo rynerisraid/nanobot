@@ -555,8 +555,9 @@ class DingTalkChannel(BaseChannel):
         conversation_id = conversation_id or sender_id
 
         try:
-            # Determine chat_id: group chat uses conversation_id, private chat uses sender_id
-            if conversation_type == "group" and conversation_id:
+            # Determine chat_id: group chat (type=2) uses conversation_id, private chat (type=1) uses sender_id
+            # conversation_type: 1=private, 2=group
+            if conversation_type == "2" and conversation_id:
                 chat_id = conversation_id
             else:
                 chat_id = sender_id
