@@ -118,24 +118,19 @@ class NanobotDingTalkHandler(CallbackHandler):
             sender_id = chatbot_msg.sender_staff_id or chatbot_msg.sender_id
             sender_name = chatbot_msg.sender_nick or "Unknown"
 
-            conversation_type = message.data.get("conversationType")
-            conversation_id = (
-                message.data.get("conversationId")
-                or message.data.get("openConversationId")
-            )
+            # Extract conversation info for group vs private chat
+            conversation_id = chatbot_msg.conversation_id
+            conversation_type = chatbot_msg.conversation_type  # "group" or "private"
 
-            logger.info("Received DingTalk message from {} ({}): {}", sender_name, sender_id, content)
+            logger.info(
+                "Received DingTalk message from {} ({}): {} (conversation_type={}, conversation_id={})",
+                sender_name, sender_id, content, conversation_type, conversation_id,
+            )
 
             # Forward to Nanobot via _on_message (non-blocking).
             # Store reference to prevent GC before task completes.
             task = asyncio.create_task(
-                self.channel._on_message(
-                    content,
-                    sender_id,
-                    sender_name,
-                    conversation_type,
-                    conversation_id,
-                )
+                self.channel._on_message(content, sender_id, sender_name, conversation_id, conversation_type)
             )
             self.channel._background_tasks.add(task)
             task.add_done_callback(self.channel._background_tasks.discard)
@@ -545,18 +540,33 @@ class DingTalkChannel(BaseChannel):
         content: str,
         sender_id: str,
         sender_name: str,
-        conversation_type: str | None = None,
         conversation_id: str | None = None,
+        conversation_type: str | None = None,
     ) -> None:
         """Handle incoming message (called by NanobotDingTalkHandler).
 
         Delegates to BaseChannel._handle_message() which enforces allow_from
         permission checks before publishing to the bus.
+
+        For group chats, use conversation_id as chat_id so replies go to the group.
+        For private chats, use sender_id as chat_id.
         """
+        # Ensure conversation_id is never None for type safety (defaults to sender_id)
+        conversation_id = conversation_id or sender_id
+
         try:
-            logger.info("DingTalk inbound: {} from {}", content, sender_name)
-            is_group = conversation_type == "2" and conversation_id
-            chat_id = f"group:{conversation_id}" if is_group else sender_id
+            # Determine chat_id: group chat uses conversation_id, private chat uses sender_id
+            if conversation_type == "group" and conversation_id:
+                chat_id = conversation_id
+            else:
+                chat_id = sender_id
+            logger.info(
+                "DingTalk inbound: {} from {} (chat_id={}, type={})",
+                content,
+                sender_name,
+                chat_id,
+                conversation_type,
+            )
             await self._handle_message(
                 sender_id=sender_id,
                 chat_id=chat_id,
