@@ -13,7 +13,11 @@ from nanobot.cron.types import CronSchedule
 class Base(BaseModel):
     """Base model that accepts both camelCase and snake_case keys."""
 
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra='ignore'  # Ignore extra fields for forward compatibility
+    )
 
 class ChannelsConfig(Base):
     """Configuration for chat channels.
@@ -237,6 +241,8 @@ class ToolsConfig(Base):
 
 class Config(BaseSettings):
     """Root configuration for nanobot."""
+
+    model_config = ConfigDict(extra='ignore')
 
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
