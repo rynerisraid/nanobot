@@ -32,6 +32,10 @@ RUN git config --global --add url."https://github.com/".insteadOf ssh://git@gith
     npm install && npm run build
 WORKDIR /app
 
+# Install Claude Code ACP globally (for ACP tool support)
+RUN npm install -g @zed-industries/claude-code-acp && \
+    npx -y @zed-industries/claude-code-acp --version || echo "ACP installed"
+
 # Create non-root user and config directory
 RUN useradd -m -u 1000 -s /bin/bash nanobot && \
     mkdir -p /home/nanobot/.nanobot && \
