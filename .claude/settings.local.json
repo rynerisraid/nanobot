@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"D:/startup/nanobot\" log --oneline -10)",
+      "WebSearch",
+      "Bash(git -C \"D:/startup/nanobot\" diff nanobot/agent/tools/mcp.py)",
+      "WebFetch(domain:github.com)",
+      "Bash(git add *)",
+      "Bash(git rebase *)",
+      "Bash(git reset *)"
+    ]
+  }
+}

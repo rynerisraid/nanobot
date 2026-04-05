@@ -20,6 +20,7 @@ from nanobot.agent.memory import Consolidator, Dream
 from nanobot.agent.runner import _MAX_INJECTIONS_PER_TURN, AgentRunner, AgentRunSpec
 from nanobot.agent.skills import BUILTIN_SKILLS_DIR
 from nanobot.agent.subagent import SubagentManager
+from nanobot.agent.tools.acp import ACPTool
 from nanobot.agent.tools.ask import (
     AskUserTool,
     ask_user_options_from_messages,
@@ -55,7 +56,7 @@ from nanobot.utils.progress_events import (
 from nanobot.utils.runtime import EMPTY_FINAL_RESPONSE_MESSAGE
 
 if TYPE_CHECKING:
-    from nanobot.config.schema import ChannelsConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
+    from nanobot.config.schema import ACPConfig, ChannelsConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
     from nanobot.cron.service import CronService
 
 
@@ -194,8 +195,9 @@ class AgentLoop:
         unified_session: bool = False,
         disabled_skills: list[str] | None = None,
         tools_config: ToolsConfig | None = None,
+        acp_config: ACPConfig | None = None,
     ):
-        from nanobot.config.schema import ExecToolConfig, ToolsConfig, WebToolsConfig
+        from nanobot.config.schema import ACPConfig, ExecToolConfig, ToolsConfig, WebToolsConfig
 
         _tc = tools_config or ToolsConfig()
         defaults = AgentDefaults()
@@ -221,6 +223,7 @@ class AgentLoop:
         self.provider_retry_mode = provider_retry_mode
         self.web_config = web_config or WebToolsConfig()
         self.exec_config = exec_config or ExecToolConfig()
+        self.acp_config = acp_config or ACPConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
         self._start_time = time.time()
@@ -327,6 +330,13 @@ class AgentLoop:
             self.tools.register(
                 CronTool(self.cron_service, default_timezone=self.context.timezone or "UTC")
             )
+        if self.acp_config and self.acp_config.enabled:
+            self.tools.register(ACPTool(
+                acpx_path=self.acp_config.acpx_path,
+                agent=self.acp_config.agent,
+                session_timeout=self.acp_config.session_timeout,
+                default_model=self.acp_config.default_model,
+            ))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -355,7 +365,7 @@ class AgentLoop:
         # Compute the effective session key (accounts for unified sessions)
         # so that subagent results route to the correct pending queue.
         effective_key = UNIFIED_SESSION_KEY if self._unified_session else f"{channel}:{chat_id}"
-        for name in ("message", "spawn", "cron", "my"):
+        for name in ("message", "spawn", "cron", "my", "acp"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
                     if name == "spawn":

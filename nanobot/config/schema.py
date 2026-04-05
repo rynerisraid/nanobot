@@ -194,6 +194,16 @@ class ExecToolConfig(Base):
     sandbox: str = ""  # sandbox backend: "" (none) or "bwrap"
     allowed_env_keys: list[str] = Field(default_factory=list)  # Env var names to pass through to subprocess (e.g. ["GOPATH", "JAVA_HOME"])
 
+class ACPConfig(Base):
+    """ACP (Agent Client Protocol) tool configuration."""
+
+    enabled: bool = True  # Enable/disable ACP tool
+    acpx_path: str = "acpx"  # Path to acpx executable or npx command (e.g. "npx -y @zed-industries/claude-code-acp")
+    agent: str = "claude"  # ACP agent type (claude, codex, etc.)
+    session_timeout: int = 3600  # Session timeout in seconds (default: 1 hour)
+    default_model: str | None = None  # Optional default model to use
+
+
 class MCPServerConfig(Base):
     """MCP server connection configuration (stdio or HTTP)."""
 
@@ -222,6 +232,7 @@ class ToolsConfig(Base):
     restrict_to_workspace: bool = False  # restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
     ssrf_whitelist: list[str] = Field(default_factory=list)  # CIDR ranges to exempt from SSRF blocking (e.g. ["100.64.0.0/10"] for Tailscale)
+    acp: ACPConfig = Field(default_factory=ACPConfig)  # ACP tool configuration
 
 
 class Config(BaseSettings):
