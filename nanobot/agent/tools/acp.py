@@ -1,7 +1,7 @@
 """ACP (Agent Client Protocol) tool for interacting with Claude Code and other ACP-compatible agents."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
@@ -190,7 +190,6 @@ class ACPTool(Tool):
         now = datetime.now()
 
         for session_key, info in self._sessions.items():
-            created = info["created"].strftime("%Y-%m-%d %H:%M:%S")
             last_used = info["last_used"].strftime("%Y-%m-%d %H:%M:%S")
             age = (now - info["last_used"]).total_seconds()
             lines.append(f"  - {session_key} ({info['name']}): last used {last_used} ({int(age)}s ago)")
